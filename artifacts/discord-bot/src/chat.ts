@@ -31,7 +31,7 @@ function pushHistory(channelId: string, role: "user" | "assistant", content: str
 export async function generateReply(
   message: Message,
   trigger: "ping" | "reply" | "random"
-): Promise<string> {
+): Promise<string | null> {
   const channelId = message.channel.id;
   const history = getHistory(channelId);
 
@@ -52,10 +52,13 @@ export async function generateReply(
     max_completion_tokens: 300,
   });
 
-  const reply = response.choices[0]?.message?.content ?? "...";
+  const raw = response.choices[0]?.message?.content;
+  const reply = raw && raw.trim() ? raw.trim() : null;
 
-  pushHistory(channelId, "user", userContent);
-  pushHistory(channelId, "assistant", reply);
+  if (reply) {
+    pushHistory(channelId, "user", userContent);
+    pushHistory(channelId, "assistant", reply);
+  }
 
   return reply;
 }
@@ -89,6 +92,8 @@ export async function handleChatMessage(message: Message): Promise<void> {
     }
 
     const reply = await generateReply(message, trigger);
+
+    if (!reply) return;
 
     if (isPinged || isReply) {
       await message.reply(reply);
