@@ -47,7 +47,7 @@ export async function generateReply(
   ];
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: "gpt-4o-mini",
     messages,
     max_completion_tokens: 300,
   });
