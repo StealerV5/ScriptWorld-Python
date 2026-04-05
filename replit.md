@@ -27,7 +27,13 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Discord Bot (`artifacts/discord-bot`)
 
-A Discord chatbot and moderation bot with prefix `m.`
+A Discord chatbot and moderation bot with prefix `m.` — written in **Python 3.12** using `discord.py`.
+
+**Structure:**
+- `bot.py` — entry point, loads cogs, error handling
+- `cogs/general.py` — chat & utility commands
+- `cogs/moderation.py` — moderation commands
+- `cogs/chat.py` — AI chatbot (gpt-4o-mini, Replit AI integration)
 
 ### Commands
 
