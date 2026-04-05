@@ -23,5 +23,36 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `pnpm --filter @workspace/discord-bot run dev` — run Discord bot locally
+
+## Discord Bot (`artifacts/discord-bot`)
+
+A Discord chatbot and moderation bot with prefix `m.`
+
+### Commands
+
+**Chat / Utility:**
+- `m.ping` — Check bot latency
+- `m.help [command]` — Show all commands or details for one
+- `m.userinfo [@user]` — Show info about a user
+- `m.serverinfo` — Show server info
+- `m.avatar [@user]` — Show a user's avatar
+- `m.say <message>` — Make the bot say something (Manage Messages required)
+
+**Moderation:**
+- `m.kick <@user> [reason]` — Kick a member
+- `m.ban <@user> [reason]` — Ban a member
+- `m.unban <userID> [reason]` — Unban by user ID
+- `m.mute <@user> <duration> [reason]` — Timeout a member (e.g. `10m`, `2h`, `1d`)
+- `m.unmute <@user>` — Remove a timeout
+- `m.warn <@user> [reason]` — Warn a member (sends DM)
+- `m.warnings [@user]` — View warnings for a user
+- `m.purge <1-100>` — Bulk delete messages
+- `m.slowmode <seconds>` — Set channel slowmode (0 to disable)
+- `m.lock` — Lock channel (prevent @everyone from sending)
+- `m.unlock` — Unlock channel
+
+### Environment Variables
+- `DISCORD_BOT_TOKEN` — Bot token from Discord Developer Portal (stored as secret)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
