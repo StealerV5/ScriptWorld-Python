@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Partials, Collection } from "discord.js";
 import { readdirSync } from "fs";
 import { join } from "path";
 import type { Command } from "./types";
+import { handleChatMessage } from "./chat";
 
 const PREFIX = "m.";
 
@@ -45,7 +46,11 @@ for (const file of eventFiles) {
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX)) return;
+
+  if (!message.content.startsWith(PREFIX)) {
+    await handleChatMessage(message);
+    return;
+  }
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const commandName = args.shift()?.toLowerCase();
