@@ -32,6 +32,10 @@ TICKET_COMMANDS = [
     ("m.ticketinfo", "View detailed info about the current ticket"),
 ]
 
+LOG_COMMANDS = [
+    ("m.loggingsetup", "Set up the moderation log channel (Server Owner only)"),
+]
+
 
 def build_commands_embed():
     embed = discord.Embed(
@@ -52,6 +56,11 @@ def build_commands_embed():
     embed.add_field(
         name="🎫 Tickets",
         value="\n".join(f"**`{usage}`**\n{desc}" for usage, desc in TICKET_COMMANDS),
+        inline=False,
+    )
+    embed.add_field(
+        name="📋 Logging",
+        value="\n".join(f"**`{usage}`**\n{desc}" for usage, desc in LOG_COMMANDS),
         inline=False,
     )
     embed.set_footer(text="[] = optional  •  <> = required")

@@ -18,6 +18,23 @@ def parse_duration(s: str) -> timedelta | None:
     return timedelta(seconds=value * multipliers[unit])
 
 
+def _log(ctx: commands.Context, action: str, target: discord.Member | discord.User | None,
+         target_id: int, reason: str, extra: str = "") -> None:
+    """Dispatch a mod_log event to the ModLog cog."""
+    ctx.bot.dispatch("mod_log", {
+        "guild_id":      ctx.guild.id,
+        "action":        action,
+        "target_id":     target_id,
+        "target_name":   str(target) if target else str(target_id),
+        "target_avatar": str(target.display_avatar.url) if isinstance(target, discord.Member) else None,
+        "mod_id":        ctx.author.id,
+        "mod_name":      str(ctx.author),
+        "reason":        reason,
+        "extra":         extra,
+        "jump_url":      ctx.message.jump_url,
+    })
+
+
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -38,6 +55,7 @@ class Moderation(commands.Cog):
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = discord.utils.utcnow()
         await ctx.reply(embed=embed)
+        _log(ctx, "kick", member, member.id, reason)
 
     @commands.command(name="ban")
     @commands.guild_only()
@@ -45,8 +63,6 @@ class Moderation(commands.Cog):
     @commands.bot_has_permissions(ban_members=True)
     async def ban(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
         """Ban a member from the server"""
-        if not member.is_banned if hasattr(member, "is_banned") else False:
-            pass
         if not member.is_kickable():
             await ctx.reply("I can't ban that user (they may have a higher role than me).")
             return
@@ -57,6 +73,7 @@ class Moderation(commands.Cog):
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = discord.utils.utcnow()
         await ctx.reply(embed=embed)
+        _log(ctx, "ban", member, member.id, reason)
 
     @commands.command(name="unban")
     @commands.guild_only()
@@ -78,6 +95,7 @@ class Moderation(commands.Cog):
             embed.add_field(name="Reason", value=reason, inline=False)
             embed.timestamp = discord.utils.utcnow()
             await ctx.reply(embed=embed)
+            _log(ctx, "unban", None, uid, reason)
         except discord.NotFound:
             await ctx.reply("That user is not banned.")
         except Exception as e:
@@ -108,6 +126,7 @@ class Moderation(commands.Cog):
             embed.add_field(name="Reason", value=reason, inline=False)
             embed.timestamp = discord.utils.utcnow()
             await ctx.reply(embed=embed)
+            _log(ctx, "mute", member, member.id, reason, extra=f"Duration: {duration_str}")
         except discord.Forbidden:
             await ctx.reply("I can't timeout that user.")
 
@@ -124,6 +143,7 @@ class Moderation(commands.Cog):
             embed.add_field(name="Moderator", value=str(ctx.author), inline=True)
             embed.timestamp = discord.utils.utcnow()
             await ctx.reply(embed=embed)
+            _log(ctx, "unmute", member, member.id, "Timeout removed")
         except discord.Forbidden:
             await ctx.reply("I can't unmute that user.")
 
@@ -149,6 +169,7 @@ class Moderation(commands.Cog):
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = discord.utils.utcnow()
         await ctx.reply(embed=embed)
+        _log(ctx, "warn", member, member.id, reason, extra=f"Warning #{count}")
 
     @commands.command(name="warnings", aliases=["warns"])
     @commands.guild_only()
@@ -181,6 +202,7 @@ class Moderation(commands.Cog):
         await ctx.message.delete()
         deleted = await ctx.channel.purge(limit=amount)
         notice = await ctx.send(f"🗑️ Deleted **{len(deleted)}** messages.")
+        _log(ctx, "purge", ctx.author, ctx.author.id, f"Purged {len(deleted)} messages", extra=f"Channel: {ctx.channel.mention}")
         await asyncio.sleep(4)
         await notice.delete()
 
@@ -198,6 +220,9 @@ class Moderation(commands.Cog):
             await ctx.reply("✅ Slowmode disabled.")
         else:
             await ctx.reply(f"✅ Slowmode set to **{seconds} second(s)**.")
+        _log(ctx, "slowmode", ctx.author, ctx.author.id,
+             "Disabled" if seconds == 0 else f"Set to {seconds}s",
+             extra=f"Channel: {ctx.channel.mention}")
 
     @commands.command(name="lock")
     @commands.guild_only()
@@ -209,6 +234,7 @@ class Moderation(commands.Cog):
         overwrite.send_messages = False
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.reply("🔒 Channel locked. Only moderators can send messages.")
+        _log(ctx, "lock", ctx.author, ctx.author.id, "Channel locked", extra=f"Channel: {ctx.channel.mention}")
 
     @commands.command(name="unlock")
     @commands.guild_only()
@@ -220,6 +246,7 @@ class Moderation(commands.Cog):
         overwrite.send_messages = None
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.reply("🔓 Channel unlocked. Everyone can send messages again.")
+        _log(ctx, "unlock", ctx.author, ctx.author.id, "Channel unlocked", extra=f"Channel: {ctx.channel.mention}")
 
 
 async def setup(bot: commands.Bot):

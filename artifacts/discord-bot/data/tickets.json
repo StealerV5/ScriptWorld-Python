@@ -1,1 +1,12 @@
-{"count": 3}
+{
+  "count": 4,
+  "guilds": {
+    "1490361207079702758": {
+      "category_name": "Active Tickets",
+      "mod_role_ids": [
+        1490370329527451930
+      ],
+      "embed_style": "detailed"
+    }
+  }
+}
