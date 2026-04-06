@@ -27,6 +27,9 @@ MOD_COMMANDS = [
 
 TICKET_COMMANDS = [
     ("m.ticketsetup", "Post the ticket support panel (Server Owner only)"),
+    ("m.close", "Close and delete a ticket channel"),
+    ("m.claim", "Claim a ticket (staff only)"),
+    ("m.ticketinfo", "View detailed info about the current ticket"),
 ]
 
 

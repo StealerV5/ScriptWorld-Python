@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import os
 import re
+import asyncio
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "tickets.json")
 os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
@@ -38,6 +39,9 @@ CATEGORY_LABELS: dict[str, tuple[str, str]] = {
     "other":      ("📋", "Other"),
 }
 
+# Topic format: #{num}|{creator_id}|{category_value}|{category_label}|{claimer_id or 0}
+TOPIC_SEP = "|"
+
 
 def load_count() -> int:
     try:
@@ -58,6 +62,29 @@ def safe_channel_name(name: str, ticket_num: int) -> str:
     if not cleaned:
         cleaned = "user"
     return f"{cleaned[:40]}-{ticket_num}"
+
+
+def build_topic(num: int, creator_id: int, cat_value: str, cat_label: str, claimer_id: int = 0) -> str:
+    return TOPIC_SEP.join([f"#{num}", str(creator_id), cat_value, cat_label, str(claimer_id)])
+
+
+def parse_topic(topic: str | None) -> dict | None:
+    """Parse the structured channel topic. Returns None if not a ticket channel."""
+    if not topic:
+        return None
+    parts = topic.split(TOPIC_SEP)
+    if len(parts) < 5 or not parts[0].startswith("#"):
+        return None
+    try:
+        return {
+            "num":        int(parts[0][1:]),
+            "creator_id": int(parts[1]),
+            "cat_value":  parts[2],
+            "cat_label":  parts[3],
+            "claimer_id": int(parts[4]),
+        }
+    except (ValueError, IndexError):
+        return None
 
 
 ticket_count: int = load_count()
@@ -127,11 +154,12 @@ class CategorySelect(discord.ui.Select):
             )
 
         channel_name = safe_channel_name(member.name, num)
+        topic = build_topic(num, member.id, value, label)
         ticket_channel = await guild.create_text_channel(
             channel_name,
             category=active_cat,
             overwrites=overwrites,
-            topic=f"Ticket #{num} | {member} | {label}",
+            topic=topic,
         )
 
         # ── Ticket channel embed ──
@@ -145,14 +173,20 @@ class CategorySelect(discord.ui.Select):
         embed.add_field(name="📋 Category", value=f"{emoji} {label}", inline=True)
         embed.add_field(name="🔢 Ticket", value=f"#{num}", inline=True)
         embed.add_field(name="🟢 Status", value="Open", inline=True)
-        embed.add_field(
-            name="\u200b",
-            value="\u200b",
-            inline=True,
-        )
+        embed.add_field(name="🙋 Claimed By", value="Unclaimed", inline=True)
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
         embed.add_field(
             name="📝 How to get help",
             value="Describe your issue below and a staff member will assist you shortly.",
+            inline=False,
+        )
+        embed.add_field(
+            name="🔧 Ticket Commands",
+            value=(
+                "`m.close` — Close and delete this ticket\n"
+                "`m.claim` — Claim this ticket (staff only)\n"
+                "`m.ticketinfo` — View detailed info about this ticket"
+            ),
             inline=False,
         )
         embed.set_footer(text=f"Ticket created • {guild.name}")
@@ -219,6 +253,21 @@ class TicketPanelView(discord.ui.View):
         self.add_item(OpenTicketButton())
 
 
+# ─────────────────────── Helpers ───────────────────────
+
+def is_ticket_channel(channel: discord.TextChannel) -> bool:
+    return (
+        isinstance(channel, discord.TextChannel)
+        and channel.category is not None
+        and channel.category.name == "Active Tickets"
+        and parse_topic(channel.topic) is not None
+    )
+
+
+def is_staff(member: discord.Member) -> bool:
+    return member.guild_permissions.manage_channels
+
+
 # ─────────────────────── Cog ───────────────────────
 
 class Tickets(commands.Cog):
@@ -226,15 +275,15 @@ class Tickets(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        # Re-register the persistent view so it survives bot restarts
         self.bot.add_view(TicketPanelView())
 
+    # ── m.ticketsetup ──────────────────────────────────
     @commands.command(name="ticketsetup")
     @commands.guild_only()
     async def ticketsetup(self, ctx: commands.Context):
         """Owner-only: Post the ticket support panel"""
         if ctx.author.id != ctx.guild.owner_id:
-            await ctx.reply("❌ Only the server owner can use this command.", ephemeral=True)
+            await ctx.reply("❌ Only the server owner can use this command.")
             return
 
         embed = discord.Embed(
@@ -272,6 +321,123 @@ class Tickets(commands.Cog):
             pass
 
         await ctx.send(embed=embed, view=TicketPanelView())
+
+    # ── m.close ────────────────────────────────────────
+    @commands.command(name="close")
+    @commands.guild_only()
+    async def close(self, ctx: commands.Context):
+        """Close and delete a ticket channel"""
+        if not is_ticket_channel(ctx.channel):
+            await ctx.reply("❌ This command can only be used inside a ticket channel.")
+            return
+
+        data = parse_topic(ctx.channel.topic)
+        is_creator = ctx.author.id == data["creator_id"]
+
+        if not is_creator and not is_staff(ctx.author):
+            await ctx.reply("❌ Only the ticket creator or staff can close this ticket.")
+            return
+
+        embed = discord.Embed(
+            title="🔒 Ticket Closing",
+            description=(
+                f"This ticket is being closed by {ctx.author.mention}.\n"
+                "The channel will be deleted in **5 seconds**."
+            ),
+            color=0xED4245,
+        )
+        embed.set_footer(text=f"Ticket #{data['num']} • {ctx.guild.name}")
+        embed.timestamp = discord.utils.utcnow()
+        await ctx.send(embed=embed)
+
+        await asyncio.sleep(5)
+        try:
+            await ctx.channel.delete(reason=f"Ticket closed by {ctx.author}")
+        except discord.NotFound:
+            pass
+
+    # ── m.claim ────────────────────────────────────────
+    @commands.command(name="claim")
+    @commands.guild_only()
+    async def claim(self, ctx: commands.Context):
+        """Claim a ticket (staff only)"""
+        if not is_ticket_channel(ctx.channel):
+            await ctx.reply("❌ This command can only be used inside a ticket channel.")
+            return
+
+        if not is_staff(ctx.author):
+            await ctx.reply("❌ Only staff members can claim a ticket.")
+            return
+
+        data = parse_topic(ctx.channel.topic)
+
+        if data["claimer_id"] != 0:
+            claimer = ctx.guild.get_member(data["claimer_id"])
+            name = claimer.mention if claimer else f"<@{data['claimer_id']}>"
+            await ctx.reply(f"❌ This ticket is already claimed by {name}.")
+            return
+
+        # Update the topic to record the claimer
+        new_topic = build_topic(
+            data["num"], data["creator_id"],
+            data["cat_value"], data["cat_label"],
+            ctx.author.id,
+        )
+        await ctx.channel.edit(topic=new_topic)
+
+        emoji, label = CATEGORY_LABELS.get(data["cat_value"], ("📋", data["cat_label"]))
+        creator = ctx.guild.get_member(data["creator_id"])
+        creator_display = creator.mention if creator else f"<@{data['creator_id']}>"
+
+        embed = discord.Embed(
+            title="🙋 Ticket Claimed",
+            color=0xFEE75C,
+        )
+        embed.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
+        embed.add_field(name="🙋 Claimed By", value=ctx.author.mention, inline=True)
+        embed.add_field(name="👤 Ticket Creator", value=creator_display, inline=True)
+        embed.add_field(name="📋 Category", value=f"{emoji} {label}", inline=True)
+        embed.set_footer(text=f"Ticket #{data['num']} • {ctx.guild.name}")
+        embed.timestamp = discord.utils.utcnow()
+        await ctx.send(embed=embed)
+
+    # ── m.ticketinfo ───────────────────────────────────
+    @commands.command(name="ticketinfo")
+    @commands.guild_only()
+    async def ticketinfo(self, ctx: commands.Context):
+        """Show detailed info about the current ticket"""
+        if not is_ticket_channel(ctx.channel):
+            await ctx.reply("❌ This command can only be used inside a ticket channel.")
+            return
+
+        data = parse_topic(ctx.channel.topic)
+        emoji, label = CATEGORY_LABELS.get(data["cat_value"], ("📋", data["cat_label"]))
+
+        creator = ctx.guild.get_member(data["creator_id"])
+        creator_display = creator.mention if creator else f"<@{data['creator_id']}>"
+        creator_avatar = creator.display_avatar.url if creator else None
+
+        claimer_display = "Unclaimed"
+        if data["claimer_id"] != 0:
+            claimer = ctx.guild.get_member(data["claimer_id"])
+            claimer_display = claimer.mention if claimer else f"<@{data['claimer_id']}>"
+
+        embed = discord.Embed(
+            title=f"📋 Ticket Info — #{data['num']}",
+            color=0x5865F2,
+        )
+        if creator_avatar:
+            embed.set_thumbnail(url=creator_avatar)
+        embed.add_field(name="👤 Created By", value=creator_display, inline=True)
+        embed.add_field(name="📋 Category", value=f"{emoji} {label}", inline=True)
+        embed.add_field(name="🔢 Ticket #", value=f"#{data['num']}", inline=True)
+        embed.add_field(name="🙋 Claimed By", value=claimer_display, inline=True)
+        embed.add_field(name="🟢 Status", value="Open", inline=True)
+        embed.add_field(name="📁 Channel", value=ctx.channel.mention, inline=True)
+        embed.set_footer(text=f"Requested by {ctx.author} • {ctx.guild.name}")
+        embed.timestamp = discord.utils.utcnow()
+
+        await ctx.reply(embed=embed)
 
 
 async def setup(bot: commands.Bot):
