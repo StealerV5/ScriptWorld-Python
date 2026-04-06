@@ -38,7 +38,7 @@ async def on_command_error(ctx, error):
 
 async def main():
     async with bot:
-        for cog in ["cogs.general", "cogs.moderation", "cogs.chat"]:
+        for cog in ["cogs.general", "cogs.moderation", "cogs.chat", "cogs.tickets"]:
             await bot.load_extension(cog)
         token = os.environ.get("DISCORD_BOT_TOKEN")
         if not token:

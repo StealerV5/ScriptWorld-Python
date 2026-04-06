@@ -25,6 +25,10 @@ MOD_COMMANDS = [
     ("m.unlock", "Unlock the channel"),
 ]
 
+TICKET_COMMANDS = [
+    ("m.ticketsetup", "Post the ticket support panel (Server Owner only)"),
+]
+
 
 def build_commands_embed():
     embed = discord.Embed(
@@ -40,6 +44,11 @@ def build_commands_embed():
     embed.add_field(
         name="🔨 Moderation",
         value="\n".join(f"**`{usage}`**\n{desc}" for usage, desc in MOD_COMMANDS),
+        inline=False,
+    )
+    embed.add_field(
+        name="🎫 Tickets",
+        value="\n".join(f"**`{usage}`**\n{desc}" for usage, desc in TICKET_COMMANDS),
         inline=False,
     )
     embed.set_footer(text="[] = optional  •  <> = required")
