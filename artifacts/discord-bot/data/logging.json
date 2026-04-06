@@ -1,0 +1,11 @@
+{
+  "guilds": {
+    "1490361207079702758": {
+      "channel_id": 1490630214655545385,
+      "use_webhook": true,
+      "webhook_url": "https://discord.com/api/webhooks/1490637071830749255/02wJVqwLZCTMTmC2T0WRMPCvUV_d7dm5TRadMPRIhoUhlh48GRZ4arfJFAprUlVQxIif",
+      "include_bots": true,
+      "include_audit_log": true
+    }
+  }
+}
